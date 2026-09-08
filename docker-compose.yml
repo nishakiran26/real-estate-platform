@@ -1,0 +1,128 @@
+# Full local stack: MySQL, Redis, the Go API and the Vue SPA.
+#
+#   cp .env.example .env && docker compose up --build
+#
+# The API waits for MySQL and Redis to report healthy before it starts, so the
+# first boot migrates and seeds against a database that is actually ready.
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: rera-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-change-me-root}
+      MYSQL_DATABASE: ${DB_NAME:-rera_properties}
+      MYSQL_USER: ${DB_USER:-rera}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-change-me}
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    ports:
+      - "${MYSQL_PORT:-3306}:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-p${MYSQL_ROOT_PASSWORD:-change-me-root}"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    networks: [rera]
+
+  redis:
+    image: redis:7-alpine
+    container_name: rera-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks: [rera]
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: rera-backend
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      APP_NAME: ${APP_NAME:-RERA Property Platform}
+      APP_ENV: ${APP_ENV:-development}
+      APP_URL: ${APP_URL:-http://localhost:8080}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5173}
+      PORT: 8080
+      # Service names resolve on the compose network; localhost would not.
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_USER: ${DB_USER:-rera}
+      DB_PASSWORD: ${DB_PASSWORD:-change-me}
+      DB_NAME: ${DB_NAME:-rera_properties}
+      DB_AUTO_MIGRATE: ${DB_AUTO_MIGRATE:-true}
+      DB_SEED: ${DB_SEED:-true}
+      REDIS_ADDR: redis:6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      REDIS_DB: ${REDIS_DB:-0}
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-production-min-32-chars}
+      JWT_ACCESS_TTL: ${JWT_ACCESS_TTL:-15}
+      JWT_REFRESH_TTL: ${JWT_REFRESH_TTL:-7}
+      OTP_TTL: ${OTP_TTL:-300}
+      OTP_MAX_ATTEMPTS: ${OTP_MAX_ATTEMPTS:-5}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@reraproperties.local}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-Admin@12345}
+      ADMIN_MOBILE: ${ADMIN_MOBILE:-9000000001}
+      SEED_DEMO_DATA: ${SEED_DEMO_DATA:-true}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173,http://localhost:3000}
+      STORAGE_DRIVER: ${STORAGE_DRIVER:-local}
+      STORAGE_LOCAL_DIR: /app/uploads
+      STORAGE_BASE_URL: ${STORAGE_BASE_URL:-http://localhost:8080/uploads}
+      MAIL_DRIVER: ${MAIL_DRIVER:-log}
+      MAIL_HOST: ${MAIL_HOST:-}
+      MAIL_PORT: ${MAIL_PORT:-587}
+      MAIL_USERNAME: ${MAIL_USERNAME:-}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-}
+      MAIL_FROM: ${MAIL_FROM:-no-reply@example.com}
+      SMS_DRIVER: ${SMS_DRIVER:-log}
+      WHATSAPP_DRIVER: ${WHATSAPP_DRIVER:-log}
+      WHATSAPP_NUMBER: ${WHATSAPP_NUMBER:-}
+      WHATSAPP_COUNTRY_CODE: ${WHATSAPP_COUNTRY_CODE:-91}
+    ports:
+      - "${BACKEND_PORT:-8080}:8080"
+    volumes:
+      - uploads_data:/app/uploads
+    networks: [rera]
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8080/api/v1}
+        VITE_APP_NAME: ${VITE_APP_NAME:-RERA Property Platform}
+    container_name: rera-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "${FRONTEND_PORT:-5173}:80"
+    networks: [rera]
+
+volumes:
+  mysql_data:
+  redis_data:
+  uploads_data:
+
+networks:
+  rera:
+    driver: bridge

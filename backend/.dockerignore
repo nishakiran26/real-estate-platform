@@ -1,0 +1,5 @@
+uploads/
+*.md
+*.cjs
+*.js
+tmp/

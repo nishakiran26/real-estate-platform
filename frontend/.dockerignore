@@ -1,0 +1,12 @@
+# node_modules is installed inside the image. Copying the host's copy over it
+# would replace a Linux install with Windows binaries and break `npm run build`,
+# because `COPY . .` runs after `npm install`.
+node_modules/
+dist/
+
+.env
+.env.*
+*.md
+.vscode/
+.idea/
+coverage/
