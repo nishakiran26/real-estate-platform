@@ -1,0 +1,24 @@
+# Replace both values before deploying. The domain must already have an A record
+# pointing at this server, or the certificate request will fail — Let's Encrypt
+# verifies by connecting back to it over the public internet.
+staging.example.com {
+	# The email is where Let's Encrypt sends expiry warnings if renewal breaks.
+	tls you@example.com
+
+	# Everything goes to the frontend container, whose nginx serves the SPA and
+	# proxies /api and /uploads to the backend. One origin, so the browser needs
+	# no CORS preflight and the bundle carries no hard-coded address.
+	reverse_proxy frontend:80
+
+	encode gzip
+
+	header {
+		# Only safe to send once the site is genuinely HTTPS-only, which it is
+		# here: Caddy redirects http to https by itself.
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "SAMEORIGIN"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+}

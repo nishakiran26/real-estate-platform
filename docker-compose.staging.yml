@@ -1,0 +1,49 @@
+# Server overlay. Use alongside the base file:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.staging.yml \
+#     --env-file .env.staging up -d --build
+#
+# Two things differ from local development, both about exposure.
+#
+# The base file publishes MySQL and Redis on the host so you can point Workbench
+# or redis-cli at them. On a public VM that means publishing your database to
+# the internet, where it will be found and attacked within hours. Here they are
+# reachable only from the compose network, which is all the API needs.
+#
+# Caddy terminates TLS and is the only thing listening publicly. It obtains and
+# renews a certificate from Let's Encrypt automatically, so there is no certbot
+# cron job to forget about.
+
+services:
+  mysql:
+    # Overrides the base list rather than adding to it: no host port at all.
+    ports: []
+
+  redis:
+    ports: []
+
+  backend:
+    # Reached through the frontend's nginx, which proxies /api on one origin.
+    ports: []
+
+  frontend:
+    ports: []
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: rera-caddy
+    restart: unless-stopped
+    depends_on:
+      - frontend
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks: [rera]
+
+volumes:
+  caddy_data:
+  caddy_config:
